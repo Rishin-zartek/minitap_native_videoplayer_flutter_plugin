@@ -21,6 +21,7 @@ class VideoPlayer(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var positionUpdateRunnable: Runnable? = null
     private var isInitialized = false
+    private var pendingPlayCommand = false
     
     val textureId: Long
         get() = surfaceProducer?.id() ?: -1L
@@ -68,6 +69,11 @@ class VideoPlayer(
                                         "width" to videoSize.width,
                                         "height" to videoSize.height
                                     ))
+                                    // Execute pending play command if any
+                                    if (pendingPlayCommand) {
+                                        pendingPlayCommand = false
+                                        play()
+                                    }
                                 }
                                 sendEvent("state", if (isPlaying) "playing" else "paused")
                             }
@@ -105,7 +111,13 @@ class VideoPlayer(
 
     fun play() {
         mainHandler.post {
-            exoPlayer?.play()
+            val player = exoPlayer
+            if (player != null && isInitialized) {
+                player.play()
+            } else {
+                // Queue the play command to be executed when player is ready
+                pendingPlayCommand = true
+            }
         }
     }
 
