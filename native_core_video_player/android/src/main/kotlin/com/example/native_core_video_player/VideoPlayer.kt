@@ -40,6 +40,10 @@ class VideoPlayer(
                         surface = null
                     }
                 })
+                
+                // Set initial size to trigger surface creation
+                // Use a default 16:9 aspect ratio, will be updated when video loads
+                surfaceProducer?.setSize(1920, 1080)
             } catch (e: Exception) {
                 sendError("initialization_error", e.message ?: "Failed to initialize")
             }
@@ -80,6 +84,12 @@ class VideoPlayer(
                             startPositionUpdates()
                         } else {
                             stopPositionUpdates()
+                        }
+                    }
+                    
+                    override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                        if (videoSize.width > 0 && videoSize.height > 0) {
+                            surfaceProducer?.setSize(videoSize.width, videoSize.height)
                         }
                     }
                 })
