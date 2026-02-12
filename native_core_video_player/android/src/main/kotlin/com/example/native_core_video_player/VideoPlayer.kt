@@ -72,8 +72,10 @@ class VideoPlayer(
                                     // Execute pending play command if any
                                     if (pendingPlayCommand) {
                                         pendingPlayCommand = false
-                                        play()
-                                        return // play() will send the state event
+                                        // Directly start playback instead of calling play() recursively
+                                        this@apply.play()
+                                        sendEvent("state", "playing")
+                                        return
                                     }
                                 }
                                 sendEvent("state", if (isPlaying) "playing" else "paused")
