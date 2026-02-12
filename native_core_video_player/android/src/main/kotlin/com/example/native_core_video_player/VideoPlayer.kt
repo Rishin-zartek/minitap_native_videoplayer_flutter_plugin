@@ -73,6 +73,7 @@ class VideoPlayer(
                                     if (pendingPlayCommand) {
                                         pendingPlayCommand = false
                                         play()
+                                        return // play() will send the state event
                                     }
                                 }
                                 sendEvent("state", if (isPlaying) "playing" else "paused")
@@ -114,6 +115,8 @@ class VideoPlayer(
             val player = exoPlayer
             if (player != null && isInitialized) {
                 player.play()
+                // Send playing state immediately, similar to iOS implementation
+                sendEvent("state", "playing")
             } else {
                 // Queue the play command to be executed when player is ready
                 pendingPlayCommand = true
@@ -124,6 +127,8 @@ class VideoPlayer(
     fun pause() {
         mainHandler.post {
             exoPlayer?.pause()
+            // Send paused state immediately, similar to iOS implementation
+            sendEvent("state", "paused")
         }
     }
 
