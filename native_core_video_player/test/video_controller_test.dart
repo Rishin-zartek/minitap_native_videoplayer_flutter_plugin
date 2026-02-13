@@ -64,6 +64,15 @@ void main() {
       expect(methodCalls[0].arguments['source'], 'https://example.com/video.mp4');
     });
 
+    test('initialize supports HLS streaming URLs', () async {
+      await controller.initialize('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8');
+      
+      expect(controller.textureId, 123);
+      expect(methodCalls.length, 1);
+      expect(methodCalls[0].method, 'initialize');
+      expect(methodCalls[0].arguments['source'], 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8');
+    });
+
     test('initialize handles errors', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(

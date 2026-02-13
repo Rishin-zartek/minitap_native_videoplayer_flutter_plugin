@@ -41,6 +41,11 @@ class VideoListScreen extends StatelessWidget {
       url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
       description: 'HLS adaptive streaming test',
     ),
+    VideoItem(
+      title: 'Tears of Steel (HLS)',
+      url: 'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+      description: 'Unified Streaming HLS test',
+    ),
   ];
 
   @override
