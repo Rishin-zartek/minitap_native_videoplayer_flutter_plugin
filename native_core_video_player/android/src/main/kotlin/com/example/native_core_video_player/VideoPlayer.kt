@@ -146,11 +146,11 @@ class VideoPlayer(
                                     if (pendingPlayCommand) {
                                         pendingPlayCommand = false
                                         Log.d(TAG, "Executing pending play command - setting playWhenReady to true")
-                                        // Use playWhenReady instead of play() to ensure playback starts
+                                        // Set playWhenReady to start playback
+                                        // Note: "playing" state was already sent by play() method
                                         playWhenReady = true
-                                        // Send playing state immediately
-                                        sendEvent("state", "playing")
-                                        return
+                                        // Don't send state here - already sent by play() method
+                                        // Just let the normal state update happen below
                                     }
                                 }
                                 // Send state based on actual playback state
@@ -201,13 +201,16 @@ class VideoPlayer(
         mainHandler.post {
             val player = exoPlayer
             Log.d(TAG, "play() called - player exists: ${player != null}, isInitialized: $isInitialized")
+            
+            // Always send "playing" state immediately, just like iOS implementation
+            // This provides instant UI feedback regardless of player initialization state
+            sendEvent("state", "playing")
+            
             if (player != null) {
                 if (isInitialized) {
                     // Player is ready, start playback immediately
                     Log.d(TAG, "Starting playback - setting playWhenReady to true")
                     player.playWhenReady = true
-                    // Send playing state immediately, similar to iOS implementation and pause()
-                    sendEvent("state", "playing")
                 } else {
                     // Player not ready yet, queue the play command
                     pendingPlayCommand = true
