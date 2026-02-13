@@ -136,12 +136,20 @@ class VideoPlayer(
                                         "width" to videoSize.width,
                                         "height" to videoSize.height
                                     ))
+                                    Log.d(TAG, "Player initialized with duration: $duration, size: ${videoSize.width}x${videoSize.height}")
+                                    // Send initial position update so metadata is visible
+                                    sendEvent("position", mapOf(
+                                        "position" to currentPosition,
+                                        "bufferedPosition" to bufferedPosition
+                                    ))
                                     // Execute pending play command if any
                                     if (pendingPlayCommand) {
                                         pendingPlayCommand = false
+                                        Log.d(TAG, "Executing pending play command")
                                         // Directly start playback instead of calling play() recursively
                                         this@apply.play()
                                         sendEvent("state", "playing")
+                                        startPositionUpdates()
                                         return
                                     }
                                 }
@@ -190,13 +198,20 @@ class VideoPlayer(
     fun play() {
         mainHandler.post {
             val player = exoPlayer
-            if (player != null && isInitialized) {
-                player.play()
-                // Send playing state immediately, similar to iOS implementation
-                sendEvent("state", "playing")
+            if (player != null) {
+                if (isInitialized) {
+                    // Player is ready, start playback immediately
+                    player.play()
+                    sendEvent("state", "playing")
+                } else {
+                    // Player not ready yet, queue the play command
+                    pendingPlayCommand = true
+                    Log.d(TAG, "Play command queued, waiting for player to be ready")
+                }
             } else {
-                // Queue the play command to be executed when player is ready
+                // Player doesn't exist yet, queue the play command
                 pendingPlayCommand = true
+                Log.d(TAG, "Play command queued, player not created yet")
             }
         }
     }
@@ -258,6 +273,12 @@ class VideoPlayer(
 
     private val duration: Long
         get() = exoPlayer?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET } ?: 0L
+
+    private val currentPosition: Long
+        get() = exoPlayer?.currentPosition ?: 0L
+
+    private val bufferedPosition: Long
+        get() = exoPlayer?.bufferedPosition ?: 0L
 
     private val videoSize: androidx.media3.common.VideoSize
         get() = exoPlayer?.videoSize ?: androidx.media3.common.VideoSize.UNKNOWN
