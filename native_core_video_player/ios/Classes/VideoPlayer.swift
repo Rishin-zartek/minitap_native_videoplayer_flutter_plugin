@@ -27,6 +27,15 @@ class VideoPlayer: NSObject, FlutterTexture {
             return
         }
         
+        // Configure audio session for playback
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            // Audio session configuration failed, but continue anyway
+            print("Failed to configure audio session: \(error)")
+        }
+        
         let asset = AVURLAsset(url: url)
         playerItem = AVPlayerItem(asset: asset)
         
@@ -118,12 +127,14 @@ class VideoPlayer: NSObject, FlutterTexture {
     }
     
     func play() {
-        player?.play()
+        guard let player = player else { return }
+        player.rate = 1.0
         sendEvent(event: "state", data: "playing")
     }
     
     func pause() {
-        player?.pause()
+        guard let player = player else { return }
+        player.rate = 0.0
         sendEvent(event: "state", data: "paused")
     }
     
@@ -158,11 +169,11 @@ class VideoPlayer: NSObject, FlutterTexture {
     @objc private func playerDidFinishPlaying() {
         sendEvent(event: "state", data: "completed")
         player?.seek(to: .zero)
-        player?.play()
+        player?.rate = 1.0
     }
     
     @objc private func appDidEnterBackground() {
-        player?.pause()
+        player?.rate = 0.0
     }
     
     @objc private func appWillEnterForeground() {
@@ -207,7 +218,7 @@ class VideoPlayer: NSObject, FlutterTexture {
         
         NotificationCenter.default.removeObserver(self)
         
-        player?.pause()
+        player?.rate = 0.0
         player = nil
         playerItem = nil
         videoOutput = nil

@@ -21,6 +21,7 @@ class VideoPlayer(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var positionUpdateRunnable: Runnable? = null
     private var isInitialized = false
+    private var pendingPlayCommand = false
     
     val textureId: Long
         get() = surfaceProducer?.id() ?: -1L
@@ -40,6 +41,10 @@ class VideoPlayer(
                         surface = null
                     }
                 })
+                
+                // Set initial size to trigger surface creation
+                // Use a default 16:9 aspect ratio, will be updated when video loads
+                surfaceProducer?.setSize(1920, 1080)
             } catch (e: Exception) {
                 sendError("initialization_error", e.message ?: "Failed to initialize")
             }
@@ -64,6 +69,14 @@ class VideoPlayer(
                                         "width" to videoSize.width,
                                         "height" to videoSize.height
                                     ))
+                                    // Execute pending play command if any
+                                    if (pendingPlayCommand) {
+                                        pendingPlayCommand = false
+                                        // Directly start playback instead of calling play() recursively
+                                        this@apply.play()
+                                        sendEvent("state", "playing")
+                                        return
+                                    }
                                 }
                                 sendEvent("state", if (isPlaying) "playing" else "paused")
                             }
@@ -82,6 +95,12 @@ class VideoPlayer(
                             stopPositionUpdates()
                         }
                     }
+                    
+                    override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                        if (videoSize.width > 0 && videoSize.height > 0) {
+                            surfaceProducer?.setSize(videoSize.width, videoSize.height)
+                        }
+                    }
                 })
 
                 val mediaItem = MediaItem.fromUri(source)
@@ -95,13 +114,23 @@ class VideoPlayer(
 
     fun play() {
         mainHandler.post {
-            exoPlayer?.play()
+            val player = exoPlayer
+            if (player != null && isInitialized) {
+                player.play()
+                // Send playing state immediately, similar to iOS implementation
+                sendEvent("state", "playing")
+            } else {
+                // Queue the play command to be executed when player is ready
+                pendingPlayCommand = true
+            }
         }
     }
 
     fun pause() {
         mainHandler.post {
             exoPlayer?.pause()
+            // Send paused state immediately, similar to iOS implementation
+            sendEvent("state", "paused")
         }
     }
 

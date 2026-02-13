@@ -27,14 +27,14 @@ class VideoListScreen extends StatelessWidget {
 
   static const List<VideoItem> videos = [
     VideoItem(
-      title: 'Big Buck Bunny (MP4)',
-      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      description: 'Standard MP4 video test',
+      title: 'Big Buck Bunny 360p (MP4)',
+      url: 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_1MB.mp4',
+      description: 'Standard MP4 video test - 360p',
     ),
     VideoItem(
-      title: 'Elephant Dream (MP4)',
-      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-      description: 'Another MP4 video test',
+      title: 'Big Buck Bunny 720p (MP4)',
+      url: 'https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_2MB.mp4',
+      description: 'HD MP4 video test - 720p',
     ),
     VideoItem(
       title: 'HLS Stream Test',

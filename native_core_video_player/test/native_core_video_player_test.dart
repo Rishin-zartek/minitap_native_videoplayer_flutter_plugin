@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:native_core_video_player/native_core_video_player.dart';
 import 'package:native_core_video_player/native_core_video_player_platform_interface.dart';
 import 'package:native_core_video_player/native_core_video_player_method_channel.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -20,10 +19,9 @@ void main() {
   });
 
   test('getPlatformVersion', () async {
-    NativeCoreVideoPlayer nativeCoreVideoPlayerPlugin = NativeCoreVideoPlayer();
     MockNativeCoreVideoPlayerPlatform fakePlatform = MockNativeCoreVideoPlayerPlatform();
     NativeCoreVideoPlayerPlatform.instance = fakePlatform;
 
-    expect(await nativeCoreVideoPlayerPlugin.getPlatformVersion(), '42');
+    expect(await fakePlatform.getPlatformVersion(), '42');
   });
 }
