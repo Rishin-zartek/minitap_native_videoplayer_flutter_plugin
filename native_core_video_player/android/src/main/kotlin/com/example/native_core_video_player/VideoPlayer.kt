@@ -3,11 +3,15 @@ package com.example.native_core_video_player
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Surface
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import io.flutter.view.TextureRegistry
 
 class VideoPlayer(
@@ -15,6 +19,10 @@ class VideoPlayer(
     private val textureRegistry: TextureRegistry,
     private val eventSink: (Map<String, Any>) -> Unit
 ) {
+    companion object {
+        private const val TAG = "VideoPlayer"
+    }
+    
     private var exoPlayer: ExoPlayer? = null
     private var surfaceProducer: TextureRegistry.SurfaceProducer? = null
     private var surface: Surface? = null
@@ -29,15 +37,31 @@ class VideoPlayer(
     fun initialize(source: String) {
         mainHandler.post {
             try {
+                Log.d(TAG, "Initializing video player with source: $source")
                 surfaceProducer = textureRegistry.createSurfaceProducer()
                 
                 surfaceProducer?.setCallback(object : TextureRegistry.SurfaceProducer.Callback {
                     override fun onSurfaceAvailable() {
+                        Log.d(TAG, "Surface available, setting up player")
                         surface = surfaceProducer?.getSurface()
-                        setupPlayer(source)
+                        
+                        // If player already exists, set the surface on it
+                        val player = exoPlayer
+                        if (player != null) {
+                            val currentSurface = surface
+                            if (currentSurface != null && currentSurface.isValid) {
+                                player.setVideoSurface(currentSurface)
+                                Log.d(TAG, "Surface set on existing player")
+                            }
+                        } else {
+                            // Otherwise, set up the player
+                            setupPlayer(source)
+                        }
                     }
 
                     override fun onSurfaceDestroyed() {
+                        Log.d(TAG, "Surface destroyed")
+                        exoPlayer?.clearVideoSurface()
                         surface = null
                     }
                 })
@@ -46,6 +70,7 @@ class VideoPlayer(
                 // Use a default 16:9 aspect ratio, will be updated when video loads
                 surfaceProducer?.setSize(1920, 1080)
             } catch (e: Exception) {
+                Log.e(TAG, "Initialization error", e)
                 sendError("initialization_error", e.message ?: "Failed to initialize")
             }
         }
@@ -53,11 +78,53 @@ class VideoPlayer(
 
     private fun setupPlayer(source: String) {
         try {
-            exoPlayer = ExoPlayer.Builder(context).build().apply {
-                setVideoSurface(surface)
+            Log.d(TAG, "Setting up ExoPlayer for source: $source")
+            
+            // Create HTTP DataSource.Factory for network requests (required for HLS)
+            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                .setUserAgent("ExoPlayer")
+                .setConnectTimeoutMs(DefaultHttpDataSource.DEFAULT_CONNECT_TIMEOUT_MILLIS)
+                .setReadTimeoutMs(DefaultHttpDataSource.DEFAULT_READ_TIMEOUT_MILLIS)
+                .setAllowCrossProtocolRedirects(true)
+            
+            Log.d(TAG, "Created HTTP DataSource.Factory for network requests")
+            
+            // Wrap HTTP DataSource in DefaultDataSource.Factory for proper ExoPlayer integration
+            val dataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+            
+            Log.d(TAG, "Created DefaultDataSource.Factory wrapper")
+            
+            // Create MediaSource.Factory by passing DataSource.Factory to constructor
+            // This ensures proper initialization order for HLS support in Media3
+            val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+            
+            Log.d(TAG, "Created MediaSource.Factory with DataSource.Factory")
+            
+            exoPlayer = ExoPlayer.Builder(context)
+                .setMediaSourceFactory(mediaSourceFactory)
+                .build().apply {
+                Log.d(TAG, "ExoPlayer built successfully")
+                
+                // Ensure surface is available before setting it
+                val currentSurface = surface
+                if (currentSurface != null && currentSurface.isValid) {
+                    setVideoSurface(currentSurface)
+                    Log.d(TAG, "Video surface set successfully")
+                } else {
+                    Log.w(TAG, "Surface not available or invalid, will be set when available")
+                }
                 
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
+                        val stateName = when (playbackState) {
+                            Player.STATE_IDLE -> "IDLE"
+                            Player.STATE_BUFFERING -> "BUFFERING"
+                            Player.STATE_READY -> "READY"
+                            Player.STATE_ENDED -> "ENDED"
+                            else -> "UNKNOWN"
+                        }
+                        Log.d(TAG, "Playback state changed: $stateName")
+                        
                         when (playbackState) {
                             Player.STATE_IDLE -> sendEvent("state", "idle")
                             Player.STATE_BUFFERING -> sendEvent("state", "buffering")
@@ -85,7 +152,11 @@ class VideoPlayer(
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        sendError("playback_error", error.message ?: "Unknown playback error")
+                        Log.e(TAG, "Player error occurred", error)
+                        Log.e(TAG, "Error code: ${error.errorCode}, Message: ${error.message}")
+                        Log.e(TAG, "Error cause: ${error.cause}")
+                        val errorMessage = "Playback error (code: ${error.errorCode}): ${error.message ?: "Unknown error"}"
+                        sendError("playback_error", errorMessage)
                     }
 
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -104,10 +175,14 @@ class VideoPlayer(
                 })
 
                 val mediaItem = MediaItem.fromUri(source)
+                Log.d(TAG, "Created MediaItem from URI: $source")
                 setMediaItem(mediaItem)
+                Log.d(TAG, "Set MediaItem on player")
                 prepare()
+                Log.d(TAG, "Player prepared, ready to play")
             }
         } catch (e: Exception) {
+            Log.e(TAG, "Player setup error", e)
             sendError("player_setup_error", e.message ?: "Failed to setup player")
         }
     }
