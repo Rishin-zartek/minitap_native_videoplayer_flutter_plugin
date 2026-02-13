@@ -123,25 +123,24 @@ class VideoPlayer(
                             Player.STATE_ENDED -> "ENDED"
                             else -> "UNKNOWN"
                         }
-                        Log.d(TAG, "Playback state changed: $stateName, isPlaying: $isPlaying, playWhenReady: $playWhenReady")
+                        val playerDuration = this@VideoPlayer.duration
+                        Log.d(TAG, "Playback state changed: $stateName, isPlaying: $isPlaying, playWhenReady: $playWhenReady, duration: $playerDuration")
                         
                         when (playbackState) {
                             Player.STATE_IDLE -> sendEvent("state", "idle")
                             Player.STATE_BUFFERING -> sendEvent("state", "buffering")
                             Player.STATE_READY -> {
+                                // Initialize when ready, even if duration is not yet available
                                 if (!isInitialized) {
                                     isInitialized = true
                                     sendEvent("initialized", mapOf(
-                                        "duration" to duration,
+                                        "duration" to playerDuration,
                                         "width" to videoSize.width,
                                         "height" to videoSize.height
                                     ))
-                                    Log.d(TAG, "Player initialized with duration: $duration, size: ${videoSize.width}x${videoSize.height}")
-                                    // Send initial position update so metadata is visible
-                                    sendEvent("position", mapOf(
-                                        "position" to currentPosition,
-                                        "bufferedPosition" to bufferedPosition
-                                    ))
+                                    Log.d(TAG, "Player initialized with duration: $playerDuration, size: ${videoSize.width}x${videoSize.height}")
+                                    // Start continuous position updates immediately when ready (like iOS)
+                                    startPositionUpdates()
                                     // Execute pending play command if any
                                     if (pendingPlayCommand) {
                                         pendingPlayCommand = false
@@ -166,15 +165,6 @@ class VideoPlayer(
                         Log.e(TAG, "Error cause: ${error.cause}")
                         val errorMessage = "Playback error (code: ${error.errorCode}): ${error.message ?: "Unknown error"}"
                         sendError("playback_error", errorMessage)
-                    }
-
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        Log.d(TAG, "onIsPlayingChanged: $isPlaying")
-                        if (isPlaying) {
-                            startPositionUpdates()
-                        } else {
-                            stopPositionUpdates()
-                        }
                     }
                     
                     override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
@@ -236,6 +226,15 @@ class VideoPlayer(
     fun seekTo(position: Long) {
         mainHandler.post {
             exoPlayer?.seekTo(position)
+            // Send position update immediately after seek (like iOS)
+            mainHandler.postDelayed({
+                exoPlayer?.let { player ->
+                    sendEvent("position", mapOf(
+                        "position" to player.currentPosition,
+                        "bufferedPosition" to player.bufferedPosition
+                    ))
+                }
+            }, 100)
         }
     }
 
