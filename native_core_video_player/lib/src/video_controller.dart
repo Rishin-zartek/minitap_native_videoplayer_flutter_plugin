@@ -82,9 +82,11 @@ class NativeVideoController extends ValueNotifier<VideoPlayerValue> {
         if (data is Map) {
           final position = data['position'] as int?;
           final bufferedPosition = data['bufferedPosition'] as int?;
+          final duration = data['duration'] as int?;
           value = value.copyWith(
             position: Duration(milliseconds: position ?? 0),
             bufferedPosition: Duration(milliseconds: bufferedPosition ?? 0),
+            duration: duration != null ? Duration(milliseconds: duration) : value.duration,
           );
         }
         break;

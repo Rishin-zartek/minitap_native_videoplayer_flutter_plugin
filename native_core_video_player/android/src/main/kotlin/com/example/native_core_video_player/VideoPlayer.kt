@@ -229,9 +229,11 @@ class VideoPlayer(
             // Send position update immediately after seek (like iOS)
             mainHandler.postDelayed({
                 exoPlayer?.let { player ->
+                    val currentDuration = duration
                     sendEvent("position", mapOf(
                         "position" to player.currentPosition,
-                        "bufferedPosition" to player.bufferedPosition
+                        "bufferedPosition" to player.bufferedPosition,
+                        "duration" to currentDuration
                     ))
                 }
             }, 100)
@@ -261,9 +263,11 @@ class VideoPlayer(
         positionUpdateRunnable = object : Runnable {
             override fun run() {
                 exoPlayer?.let { player ->
+                    val currentDuration = duration
                     sendEvent("position", mapOf(
                         "position" to player.currentPosition,
-                        "bufferedPosition" to player.bufferedPosition
+                        "bufferedPosition" to player.bufferedPosition,
+                        "duration" to currentDuration
                     ))
                     mainHandler.postDelayed(this, 100)
                 }

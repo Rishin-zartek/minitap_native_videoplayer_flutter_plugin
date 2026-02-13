@@ -190,10 +190,12 @@ class VideoPlayer: NSObject, FlutterTexture {
         
         let position = CMTimeGetSeconds(player.currentTime())
         let buffered = getBufferedPosition()
+        let duration = CMTimeGetSeconds(item.duration)
         
         sendEvent(event: "position", data: [
             "position": Int64(position * 1000),
-            "bufferedPosition": Int64(buffered * 1000)
+            "bufferedPosition": Int64(buffered * 1000),
+            "duration": Int64(duration * 1000)
         ])
     }
     
