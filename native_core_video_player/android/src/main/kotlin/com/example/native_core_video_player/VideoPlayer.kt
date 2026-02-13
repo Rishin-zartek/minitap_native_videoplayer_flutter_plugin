@@ -123,7 +123,7 @@ class VideoPlayer(
                             Player.STATE_ENDED -> "ENDED"
                             else -> "UNKNOWN"
                         }
-                        Log.d(TAG, "Playback state changed: $stateName")
+                        Log.d(TAG, "Playback state changed: $stateName, isPlaying: $isPlaying, playWhenReady: $playWhenReady")
                         
                         when (playbackState) {
                             Player.STATE_IDLE -> sendEvent("state", "idle")
@@ -145,14 +145,14 @@ class VideoPlayer(
                                     // Execute pending play command if any
                                     if (pendingPlayCommand) {
                                         pendingPlayCommand = false
-                                        Log.d(TAG, "Executing pending play command")
-                                        // Directly start playback instead of calling play() recursively
-                                        this@apply.play()
-                                        sendEvent("state", "playing")
-                                        startPositionUpdates()
+                                        Log.d(TAG, "Executing pending play command - setting playWhenReady to true")
+                                        // Use playWhenReady instead of play() to ensure playback starts
+                                        playWhenReady = true
+                                        // State will be updated by onIsPlayingChanged callback
                                         return
                                     }
                                 }
+                                // Send state based on actual playback state
                                 sendEvent("state", if (isPlaying) "playing" else "paused")
                             }
                             Player.STATE_ENDED -> sendEvent("state", "completed")
@@ -168,7 +168,9 @@ class VideoPlayer(
                     }
 
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        Log.d(TAG, "onIsPlayingChanged: $isPlaying")
                         if (isPlaying) {
+                            sendEvent("state", "playing")
                             startPositionUpdates()
                         } else {
                             stopPositionUpdates()
@@ -198,11 +200,13 @@ class VideoPlayer(
     fun play() {
         mainHandler.post {
             val player = exoPlayer
+            Log.d(TAG, "play() called - player exists: ${player != null}, isInitialized: $isInitialized")
             if (player != null) {
                 if (isInitialized) {
                     // Player is ready, start playback immediately
-                    player.play()
-                    sendEvent("state", "playing")
+                    Log.d(TAG, "Starting playback - setting playWhenReady to true")
+                    player.playWhenReady = true
+                    // State will be updated by onIsPlayingChanged callback
                 } else {
                     // Player not ready yet, queue the play command
                     pendingPlayCommand = true
@@ -218,7 +222,8 @@ class VideoPlayer(
 
     fun pause() {
         mainHandler.post {
-            exoPlayer?.pause()
+            Log.d(TAG, "pause() called")
+            exoPlayer?.playWhenReady = false
             // Send paused state immediately, similar to iOS implementation
             sendEvent("state", "paused")
         }
