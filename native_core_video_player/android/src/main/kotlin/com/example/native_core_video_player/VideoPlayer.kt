@@ -148,7 +148,8 @@ class VideoPlayer(
                                         Log.d(TAG, "Executing pending play command - setting playWhenReady to true")
                                         // Use playWhenReady instead of play() to ensure playback starts
                                         playWhenReady = true
-                                        // State will be updated by onIsPlayingChanged callback
+                                        // Send playing state immediately
+                                        sendEvent("state", "playing")
                                         return
                                     }
                                 }
@@ -170,7 +171,6 @@ class VideoPlayer(
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         Log.d(TAG, "onIsPlayingChanged: $isPlaying")
                         if (isPlaying) {
-                            sendEvent("state", "playing")
                             startPositionUpdates()
                         } else {
                             stopPositionUpdates()
@@ -206,7 +206,8 @@ class VideoPlayer(
                     // Player is ready, start playback immediately
                     Log.d(TAG, "Starting playback - setting playWhenReady to true")
                     player.playWhenReady = true
-                    // State will be updated by onIsPlayingChanged callback
+                    // Send playing state immediately, similar to iOS implementation and pause()
+                    sendEvent("state", "playing")
                 } else {
                     // Player not ready yet, queue the play command
                     pendingPlayCommand = true
