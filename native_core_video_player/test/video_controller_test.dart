@@ -273,5 +273,239 @@ void main() {
       await controller.dispose();
     });
 
+    group('Event handling', () {
+      late StreamController<dynamic> eventStreamController;
+
+      setUp(() {
+        eventStreamController = StreamController<dynamic>.broadcast();
+        
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockStreamHandler(
+          const EventChannel('native_core_video_player/events'),
+          MockStreamHandler.inline(
+            onListen: (Object? arguments, MockStreamHandlerEventSink events) {
+              eventStreamController.stream.listen(
+                events.success,
+                onError: (dynamic error) => events.error(
+                  code: 'ERROR',
+                  message: error.toString(),
+                ),
+                onDone: events.endOfStream,
+              );
+            },
+            onCancel: (Object? arguments) {},
+          ),
+        );
+      });
+
+      tearDown(() {
+        eventStreamController.close();
+      });
+
+      test('handles initialized event', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'initialized',
+          'data': {
+            'duration': 120000,
+            'width': 1920,
+            'height': 1080,
+          },
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.duration, const Duration(milliseconds: 120000));
+        expect(controller.value.width, 1920);
+        expect(controller.value.height, 1080);
+      });
+
+      test('handles state event - playing', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'state',
+          'data': 'playing',
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.state, VideoState.playing);
+      });
+
+      test('handles state event - paused', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'state',
+          'data': 'paused',
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.state, VideoState.paused);
+      });
+
+      test('handles state event - buffering', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'state',
+          'data': 'buffering',
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.state, VideoState.buffering);
+      });
+
+      test('handles state event - completed', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'state',
+          'data': 'completed',
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.state, VideoState.completed);
+      });
+
+      test('handles state event - idle', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'state',
+          'data': 'idle',
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.state, VideoState.idle);
+      });
+
+      test('handles state event - unknown state defaults to idle', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'state',
+          'data': 'unknown_state',
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.state, VideoState.idle);
+      });
+
+      test('handles position event', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'position',
+          'data': {
+            'position': 30000,
+            'bufferedPosition': 45000,
+          },
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.position, const Duration(milliseconds: 30000));
+        expect(controller.value.bufferedPosition, const Duration(milliseconds: 45000));
+      });
+
+      test('handles error event', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'error',
+          'data': {
+            'code': 'PLAYBACK_ERROR',
+            'message': 'Failed to play video',
+          },
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.state, VideoState.error);
+        expect(controller.value.errorCode, 'PLAYBACK_ERROR');
+        expect(controller.value.errorMessage, 'Failed to play video');
+      });
+
+      test('ignores events when disposed', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        await controller.dispose();
+        
+        final initialValue = controller.value;
+        
+        eventStreamController.add({
+          'event': 'state',
+          'data': 'playing',
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Value should not change after disposal
+        expect(controller.value, initialValue);
+      });
+
+      test('handles stream errors', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.addError('Stream error');
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.state, VideoState.error);
+        expect(controller.value.errorCode, 'stream_error');
+        expect(controller.value.errorMessage, contains('Stream error'));
+      });
+
+      test('ignores invalid event format', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        final initialValue = controller.value;
+        
+        // Send non-map event
+        eventStreamController.add('invalid event');
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Value should not change
+        expect(controller.value.state, initialValue.state);
+      });
+
+      test('handles initialized event with missing data', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'initialized',
+          'data': {},
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.duration, Duration.zero);
+        expect(controller.value.width, null);
+        expect(controller.value.height, null);
+      });
+
+      test('handles position event with missing data', () async {
+        await controller.initialize('https://example.com/video.mp4');
+        
+        eventStreamController.add({
+          'event': 'position',
+          'data': {},
+        });
+
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        expect(controller.value.position, Duration.zero);
+        expect(controller.value.bufferedPosition, Duration.zero);
+      });
+    });
+
   });
 }

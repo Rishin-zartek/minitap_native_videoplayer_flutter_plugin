@@ -123,28 +123,36 @@ class VideoPlayer(
                             Player.STATE_ENDED -> "ENDED"
                             else -> "UNKNOWN"
                         }
-                        Log.d(TAG, "Playback state changed: $stateName")
+                        val playerDuration = this@VideoPlayer.duration
+                        Log.d(TAG, "Playback state changed: $stateName, isPlaying: $isPlaying, playWhenReady: $playWhenReady, duration: $playerDuration")
                         
                         when (playbackState) {
                             Player.STATE_IDLE -> sendEvent("state", "idle")
                             Player.STATE_BUFFERING -> sendEvent("state", "buffering")
                             Player.STATE_READY -> {
+                                // Initialize when ready, even if duration is not yet available
                                 if (!isInitialized) {
                                     isInitialized = true
                                     sendEvent("initialized", mapOf(
-                                        "duration" to duration,
+                                        "duration" to playerDuration,
                                         "width" to videoSize.width,
                                         "height" to videoSize.height
                                     ))
+                                    Log.d(TAG, "Player initialized with duration: $playerDuration, size: ${videoSize.width}x${videoSize.height}")
+                                    // Start continuous position updates immediately when ready (like iOS)
+                                    startPositionUpdates()
                                     // Execute pending play command if any
                                     if (pendingPlayCommand) {
                                         pendingPlayCommand = false
-                                        // Directly start playback instead of calling play() recursively
-                                        this@apply.play()
-                                        sendEvent("state", "playing")
-                                        return
+                                        Log.d(TAG, "Executing pending play command - setting playWhenReady to true")
+                                        // Set playWhenReady to start playback
+                                        // Note: "playing" state was already sent by play() method
+                                        playWhenReady = true
+                                        // Don't send state here - already sent by play() method
+                                        // Just let the normal state update happen below
                                     }
                                 }
+                                // Send state based on actual playback state
                                 sendEvent("state", if (isPlaying) "playing" else "paused")
                             }
                             Player.STATE_ENDED -> sendEvent("state", "completed")
@@ -157,14 +165,6 @@ class VideoPlayer(
                         Log.e(TAG, "Error cause: ${error.cause}")
                         val errorMessage = "Playback error (code: ${error.errorCode}): ${error.message ?: "Unknown error"}"
                         sendError("playback_error", errorMessage)
-                    }
-
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        if (isPlaying) {
-                            startPositionUpdates()
-                        } else {
-                            stopPositionUpdates()
-                        }
                     }
                     
                     override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
@@ -190,20 +190,34 @@ class VideoPlayer(
     fun play() {
         mainHandler.post {
             val player = exoPlayer
-            if (player != null && isInitialized) {
-                player.play()
-                // Send playing state immediately, similar to iOS implementation
-                sendEvent("state", "playing")
+            Log.d(TAG, "play() called - player exists: ${player != null}, isInitialized: $isInitialized")
+            
+            // Always send "playing" state immediately, just like iOS implementation
+            // This provides instant UI feedback regardless of player initialization state
+            sendEvent("state", "playing")
+            
+            if (player != null) {
+                if (isInitialized) {
+                    // Player is ready, start playback immediately
+                    Log.d(TAG, "Starting playback - setting playWhenReady to true")
+                    player.playWhenReady = true
+                } else {
+                    // Player not ready yet, queue the play command
+                    pendingPlayCommand = true
+                    Log.d(TAG, "Play command queued, waiting for player to be ready")
+                }
             } else {
-                // Queue the play command to be executed when player is ready
+                // Player doesn't exist yet, queue the play command
                 pendingPlayCommand = true
+                Log.d(TAG, "Play command queued, player not created yet")
             }
         }
     }
 
     fun pause() {
         mainHandler.post {
-            exoPlayer?.pause()
+            Log.d(TAG, "pause() called")
+            exoPlayer?.playWhenReady = false
             // Send paused state immediately, similar to iOS implementation
             sendEvent("state", "paused")
         }
@@ -212,6 +226,17 @@ class VideoPlayer(
     fun seekTo(position: Long) {
         mainHandler.post {
             exoPlayer?.seekTo(position)
+            // Send position update immediately after seek (like iOS)
+            mainHandler.postDelayed({
+                exoPlayer?.let { player ->
+                    val currentDuration = duration
+                    sendEvent("position", mapOf(
+                        "position" to player.currentPosition,
+                        "bufferedPosition" to player.bufferedPosition,
+                        "duration" to currentDuration
+                    ))
+                }
+            }, 100)
         }
     }
 
@@ -238,9 +263,11 @@ class VideoPlayer(
         positionUpdateRunnable = object : Runnable {
             override fun run() {
                 exoPlayer?.let { player ->
+                    val currentDuration = duration
                     sendEvent("position", mapOf(
                         "position" to player.currentPosition,
-                        "bufferedPosition" to player.bufferedPosition
+                        "bufferedPosition" to player.bufferedPosition,
+                        "duration" to currentDuration
                     ))
                     mainHandler.postDelayed(this, 100)
                 }
@@ -258,6 +285,12 @@ class VideoPlayer(
 
     private val duration: Long
         get() = exoPlayer?.duration?.takeIf { it != androidx.media3.common.C.TIME_UNSET } ?: 0L
+
+    private val currentPosition: Long
+        get() = exoPlayer?.currentPosition ?: 0L
+
+    private val bufferedPosition: Long
+        get() = exoPlayer?.bufferedPosition ?: 0L
 
     private val videoSize: androidx.media3.common.VideoSize
         get() = exoPlayer?.videoSize ?: androidx.media3.common.VideoSize.UNKNOWN

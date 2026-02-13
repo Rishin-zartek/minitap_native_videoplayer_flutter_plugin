@@ -113,8 +113,14 @@ class VideoPlayer: NSObject, FlutterTexture {
                             "width": Int(size.width),
                             "height": Int(size.height)
                         ])
+                        // Send initial position update so metadata is visible
+                        updatePosition()
                     }
-                    sendEvent(event: "state", data: "paused")
+                    // Only send paused state if player is not actually playing
+                    // This prevents overriding the playing state when play() is called
+                    if let player = player, player.rate == 0.0 {
+                        sendEvent(event: "state", data: "paused")
+                    }
                 case .failed:
                     sendError(code: "playback_error", message: item.error?.localizedDescription ?? "Unknown error")
                 default:
@@ -184,10 +190,12 @@ class VideoPlayer: NSObject, FlutterTexture {
         
         let position = CMTimeGetSeconds(player.currentTime())
         let buffered = getBufferedPosition()
+        let duration = CMTimeGetSeconds(item.duration)
         
         sendEvent(event: "position", data: [
             "position": Int64(position * 1000),
-            "bufferedPosition": Int64(buffered * 1000)
+            "bufferedPosition": Int64(buffered * 1000),
+            "duration": Int64(duration * 1000)
         ])
     }
     
